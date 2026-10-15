@@ -1,0 +1,11 @@
+{
+  "name": "mystery-draw",
+  "version": "1.0.0",
+  "description": "Mystery Name Shuffle - Student Winner Selection System (100% TypeScript & Node.js)",
+  "private": true,
+  "scripts": {
+    "dev": "npm --prefix frontend run dev",
+    "build": "npm --prefix frontend run build",
+    "backend": "npm --prefix backend run dev"
+  }
+}
