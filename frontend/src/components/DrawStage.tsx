@@ -104,10 +104,10 @@ export const DrawStage: React.FC<DrawStageProps> = ({
     setIsDecelerating(false);
 
     const startTime = Date.now();
-    const fastDuration = 6000; // 6 seconds high-speed blur spin
+    const fastDuration = 5500; // 5.5s high-speed blur spin
 
-    // Progressive near-miss slowdown steps: gradual deceleration up to 1.6s hold
-    const slowDelays = [90, 160, 280, 480, 800, 1200, 1600];
+    // Progressive near-miss slowdown steps: gradual deceleration before winner landing
+    const slowDelays = [120, 220, 380, 600, 950, 1300];
     let slowIndex = 0;
 
     // Helper to roll random names on reel
@@ -129,27 +129,37 @@ export const DrawStage: React.FC<DrawStageProps> = ({
       if (elapsed < fastDuration) {
         shuffleTimerRef.current = setTimeout(doFastSpin, 50);
       } else {
-        // Switch to Phase 2: Step-by-step near-miss deceleration
         setIsDecelerating(true);
         doSlowStep();
       }
     };
 
-    // Phase 2: Progressive slow steps (90ms -> 160ms -> 280ms -> 480ms -> 800ms -> 1200ms -> 1600ms)
     const doSlowStep = () => {
       if (slowIndex < slowDelays.length) {
         const currentDelay = slowDelays[slowIndex];
         slowIndex++;
 
-        // Roll next name (visible pause on each candidate)
+        // Roll near-miss random candidate
         rollNames();
 
         // Schedule next slower step
         shuffleTimerRef.current = setTimeout(doSlowStep, currentDelay);
       } else {
-        // Final Step: Land directly on the winner after the final suspense pause!
-        setDisplayedName(selectedWinner);
-        finishReveal(selectedWinner);
+        // FINAL STEP: The reel takes its last click and LANDS DIRECTLY ON THE ACTUAL WINNER!
+        const winnerIdx = participants.findIndex(p => p.reg_no === selectedWinner.reg_no);
+        const pIdx = winnerIdx >= 0 ? winnerIdx : 0;
+        const prevIdx = (pIdx - 1 + participants.length) % participants.length;
+        const nextIdx = (pIdx + 1) % participants.length;
+
+        setPrevName(participants[prevIdx] || { name: '...', reg_no: '...' });
+        setDisplayedName(selectedWinner); // <-- Show actual winner in the reel!
+        setNextName(participants[nextIdx] || { name: '...', reg_no: '...' });
+        setIsDecelerating(true);
+
+        // Hold the winner on the reel for 1.5 seconds so everyone clearly sees it stop on them!
+        shuffleTimerRef.current = setTimeout(() => {
+          finishReveal(selectedWinner);
+        }, 1500);
       }
     };
 
@@ -328,16 +338,20 @@ export const DrawStage: React.FC<DrawStageProps> = ({
             }}
             className="inline-flex items-center gap-2 px-6 py-2 rounded-full border-2 text-xs font-mono font-bold uppercase tracking-wider mb-6 shadow-[0_0_20px_rgba(255,0,127,0.4)] transition-all"
           >
-            <span className={`w-3 h-3 rounded-full ${isDecelerating ? 'bg-amber-400 animate-ping' : 'bg-pink-500 animate-ping'}`} />
-            <span className={isDecelerating ? 'text-amber-300 font-black' : 'text-white'}>
-              {isDecelerating ? '🚨 DECELERATING... CANDIDATE LOCKING IN!' : '🎰 SHUFFLING PARTICIPANTS...'}
+            <span className={`w-3 h-3 rounded-full ${displayedName.reg_no === winner?.reg_no ? 'bg-emerald-400 animate-bounce' : (isDecelerating ? 'bg-amber-400 animate-ping' : 'bg-pink-500 animate-ping')}`} />
+            <span className={displayedName.reg_no === winner?.reg_no ? 'text-emerald-300 font-black' : (isDecelerating ? 'text-amber-300 font-black' : 'text-white')}>
+              {displayedName.reg_no === winner?.reg_no 
+                ? '🎉 WINNER LOCKED IN!' 
+                : (isDecelerating ? '🚨 DECELERATING... CANDIDATE LOCKING IN!' : '🎰 SHUFFLING PARTICIPANTS...')}
             </span>
           </div>
 
           {/* Slot Machine Window */}
           <div 
             style={{ 
-              background: isDecelerating 
+              background: displayedName.reg_no === winner?.reg_no
+                ? 'linear-gradient(135deg, #ffe600 0%, #34d399 50%, #00f0ff 100%)'
+                : isDecelerating 
                 ? 'linear-gradient(135deg, #ffe600 0%, #ff007f 50%, #ffe600 100%)' 
                 : 'linear-gradient(135deg, #ff007f 0%, #8b5cf6 50%, #00f0ff 100%)' 
             }}
@@ -369,16 +383,23 @@ export const DrawStage: React.FC<DrawStageProps> = ({
 
               {/* Active Hero Slot Name (Center Target) */}
               <div 
-                style={{ background: 'rgba(0, 0, 0, 0.7)', borderColor: '#ff007f' }}
-                className="my-5 py-6 px-8 w-full rounded-2xl border-2 shadow-[0_0_30px_rgba(255,0,127,0.4)] relative flex flex-col items-center justify-center"
+                style={{ 
+                  background: displayedName.reg_no === winner?.reg_no ? 'rgba(0, 0, 0, 0.85)' : 'rgba(0, 0, 0, 0.7)', 
+                  borderColor: displayedName.reg_no === winner?.reg_no ? '#ffe600' : '#ff007f' 
+                }}
+                className="my-5 py-6 px-8 w-full rounded-2xl border-2 shadow-[0_0_30px_rgba(255,0,127,0.4)] relative flex flex-col items-center justify-center transition-all duration-300"
               >
                 <div className="text-xs font-mono text-amber-300 font-extrabold uppercase tracking-widest mb-1 flex items-center gap-1.5">
                   <Star className="w-3.5 h-3.5 text-amber-300 fill-current" />
-                  <span>CANDIDATE REEL</span>
+                  <span>{displayedName.reg_no === winner?.reg_no ? '★ WINNER LOCKED ★' : 'CANDIDATE REEL'}</span>
                   <Star className="w-3.5 h-3.5 text-amber-300 fill-current" />
                 </div>
 
-                <div className="text-4xl sm:text-6xl md:text-7xl font-display font-black text-white text-glow-pink tracking-tight truncate w-full">
+                <div className={`text-4xl sm:text-6xl md:text-7xl font-display font-black tracking-tight truncate w-full ${
+                  displayedName.reg_no === winner?.reg_no 
+                    ? 'text-amber-300 text-glow-yellow scale-105 transition-transform' 
+                    : 'text-white text-glow-pink'
+                }`}>
                   {displayedName.name}
                 </div>
 
@@ -399,7 +420,9 @@ export const DrawStage: React.FC<DrawStageProps> = ({
           </div>
 
           <p className="text-xs font-mono font-bold text-amber-300 mt-5 tracking-widest uppercase">
-            {isDecelerating ? '🔒 LOCKING IN LUCKY WINNER... NEAR MISS!' : '🎲 SHUFFLING CANDIDATES...'}
+            {displayedName.reg_no === winner?.reg_no
+              ? '✨ OFFICIAL WINNER LOCKED ON REEL! ✨'
+              : (isDecelerating ? '🔒 LOCKING IN LUCKY WINNER... NEAR MISS!' : '🎲 SHUFFLING CANDIDATES...')}
           </p>
         </motion.div>
       )}
